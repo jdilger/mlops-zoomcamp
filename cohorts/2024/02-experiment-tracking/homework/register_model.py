@@ -10,7 +10,13 @@ from sklearn.metrics import mean_squared_error
 
 HPO_EXPERIMENT_NAME = "random-forest-hyperopt"
 EXPERIMENT_NAME = "random-forest-best-models"
-RF_PARAMS = ['max_depth', 'n_estimators', 'min_samples_split', 'min_samples_leaf', 'random_state']
+RF_PARAMS = [
+    "max_depth",
+    "n_estimators",
+    "min_samples_split",
+    "min_samples_leaf",
+    "random_state",
+]
 
 mlflow.set_tracking_uri("http://127.0.0.1:5000")
 mlflow.set_experiment(EXPERIMENT_NAME)
@@ -45,13 +51,13 @@ def train_and_log_model(data_path, params):
 @click.option(
     "--data_path",
     default="./output",
-    help="Location where the processed NYC taxi trip data was saved"
+    help="Location where the processed NYC taxi trip data was saved",
 )
 @click.option(
     "--top_n",
     default=5,
     type=int,
-    help="Number of top models that need to be evaluated to decide which one to promote"
+    help="Number of top models that need to be evaluated to decide which one to promote",
 )
 def run_register_model(data_path: str, top_n: int):
 
@@ -63,18 +69,22 @@ def run_register_model(data_path: str, top_n: int):
         experiment_ids=experiment.experiment_id,
         run_view_type=ViewType.ACTIVE_ONLY,
         max_results=top_n,
-        order_by=["metrics.rmse ASC"]
+        order_by=["metrics.rmse ASC"],
     )
     for run in runs:
-        train_and_log_model(data_path=data_path, params=run.data.params)
+        params = run.data.metrics
+        params.pop("rmse", None)
+        train_and_log_model(data_path=data_path, params=run.data.metrics)
 
     # Select the model with the lowest test RMSE
     experiment = client.get_experiment_by_name(EXPERIMENT_NAME)
-    # best_run = client.search_runs( ...  )[0]
+    best_run = client.search_runs(
+        experiment_ids=experiment.experiment_id, order_by=["metrics.test_rmse ASC"]
+    )[0].info.run_id
 
     # Register the best model
-    # mlflow.register_model( ... )
+    mlflow.register_model(f"runs:/{best_run}/models", "taxi-model")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     run_register_model()
